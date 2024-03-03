@@ -7,13 +7,13 @@ To do that, this program implements the `org.freedesktop.impl.portal.Background`
 
 # Usage
 
-> **Important:** for an installation guide see [Wiki](TODO)
+> **Important:** for an installation guide see [Wiki](https://github.com/robert-oleynik/xdg-desktop-portal-background/wiki/How-to-install-XDG-Background-Desktop-Portal)
 
 This portal can be enabled in your current setup by adding `org.freedesktop.impl.portal.Background=background` to your `<de>-portals.conf`.
 
 For Hyprland this would look like:
 
-```conf
+```ini
 # File: ~/.config/xdg-desktop-portal/hyprland-portals.conf or /usr/share/xdg-desktop-portal/hyprland-portals.conf
 [preferred]
 default=hyprland;gtk
