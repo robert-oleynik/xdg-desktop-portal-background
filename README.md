@@ -5,6 +5,21 @@
 This application provides a desktop agnostic implementation to register Autostart applications.
 To do that, this program implements the `org.freedesktop.impl.portal.Background` portal, normally provided by GNOME or KDE.
 
+# Usage
+
+> **Important:** for an installation guide see [Wiki](TODO)
+
+This portal can be enabled in your current setup by adding `org.freedesktop.impl.portal.Background=background` to your `<de>-portals.conf`.
+
+For Hyprland this would look like:
+
+```conf
+# File: ~/.config/xdg-desktop-portal/hyprland-portals.conf or /usr/share/xdg-desktop-portal/hyprland-portals.conf
+[preferred]
+default=hyprland;gtk
+org.freedesktop.impl.portal.Background=background
+```
+
 # Limitations
 
 Can not track if an application has a visible or open window.
@@ -15,4 +30,5 @@ This can be done by using [dex](https://github.com/jceb/dex) or similar applicat
 # To-Do
 
 - [ ] Send system notifications to request background execution.
-- [ ] Use autostart directory
+- [x] Use autostart directory
+- [ ] Handle D-Bus activatable applications (Handle Autostart flags)

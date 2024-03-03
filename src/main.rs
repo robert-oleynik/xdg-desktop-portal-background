@@ -9,7 +9,6 @@ use xdg::BaseDirectories;
 
 use crate::background::Background;
 
-mod app;
 mod background;
 mod system;
 

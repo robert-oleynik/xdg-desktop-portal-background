@@ -1,16 +1,21 @@
-use std::io::ErrorKind;
 use std::process::{Child, Command};
 
 use anyhow::Context;
 use async_std::path::{Path, PathBuf};
 use async_std::stream::StreamExt;
+use configparser::ini::{Ini, WriteOptions};
 use xdg::BaseDirectories;
-
-use crate::app::App;
 
 /// Used to manage all background applications.
 pub struct System {
     base_dir: BaseDirectories,
+}
+
+pub struct App {
+    pub id: String,
+    pub autostart: bool,
+    pub cmd: Vec<String>,
+    pub flags: u32,
 }
 
 impl System {
@@ -67,10 +72,16 @@ impl System {
         Ok(apps)
     }
 
+    pub fn autostart_dir(&self) -> PathBuf {
+        let mut autostart = self.base_dir.get_config_home();
+        autostart.push("autostart");
+        autostart.into()
+    }
+
     fn app_path(&self, app_id: &str) -> PathBuf {
-        self.base_dir
-            .get_data_file(format!("apps/{app_id}.toml"))
-            .into()
+        let mut autostart = self.autostart_dir();
+        autostart.push(format!("{app_id}.desktop"));
+        autostart
     }
 }
 
@@ -80,19 +91,39 @@ impl From<BaseDirectories> for System {
     }
 }
 
+const INI_SECTION: &str = "Desktop Entry";
+
 async fn store_app(path: impl AsRef<Path>, app: &App) -> anyhow::Result<()> {
-    let content = toml::to_string(app).context("failed to generate app file")?;
-    async_std::fs::write(path, &content)
+    let mut autostart = Ini::new();
+    autostart.set(INI_SECTION, "Type", Some("Application".into()));
+    autostart.set(INI_SECTION, "Name", Some(app.id.clone()));
+    let command = app.cmd.join(" ");
+    autostart.set(INI_SECTION, "Exec", Some(command));
+    let opts = WriteOptions::new_with_params(true, 0, 1);
+    autostart
+        .pretty_write_async(path.as_ref(), &opts)
         .await
-        .context("failed to write app file")
+        .context("failed to write .desktop file")
 }
 
 async fn load_app(path: impl AsRef<Path>) -> anyhow::Result<Option<App>> {
-    let content = match async_std::fs::read_to_string(path).await {
-        Ok(content) => content,
-        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(None),
-        Err(err) => return Err(err).context("failed to read app file")?,
+    let mut autostart = Ini::new();
+    if let Err(err) = autostart.load_async(path.as_ref()).await {
+        return Err(anyhow::anyhow!("{err}")).context("failed to read .desktop file");
+    }
+    let id = match autostart.get(INI_SECTION, "Name") {
+        Some(id) => id,
+        None => anyhow::bail!("missing Name"),
     };
-    let app = toml::from_str(&content).context("failed to parse app file")?;
-    Ok(Some(app))
+    // TODO: Split command properly
+    let cmd = match autostart.get(INI_SECTION, "Exec") {
+        Some(cmd) => vec![cmd],
+        None => anyhow::bail!("missing Exec"),
+    };
+    Ok(Some(App {
+        id,
+        cmd,
+        autostart: true,
+        flags: 0,
+    }))
 }

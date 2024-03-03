@@ -8,8 +8,7 @@ use std::process::Child;
 use xdg::BaseDirectories;
 use zbus::object_server::SignalContext;
 
-use crate::app::App;
-use crate::system::System;
+use crate::system::{App, System};
 
 pub struct Background {
     process: HashMap<String, Child>,
