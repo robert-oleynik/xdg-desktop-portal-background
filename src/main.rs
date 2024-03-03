@@ -54,8 +54,7 @@ async fn main() -> anyhow::Result<()> {
     let conn = zbus::Connection::session()
         .await
         .context("failed to create zbus session")?;
-    let mut bg = Background::from(base_dir);
-    bg.startup().await.context("startup failed")?;
+    let bg = Background::from(base_dir);
     conn.object_server()
         .at("/org/freedesktop/portal/desktop", bg)
         .await

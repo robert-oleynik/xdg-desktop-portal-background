@@ -1,5 +1,3 @@
-use std::process::{Child, Command};
-
 use anyhow::Context;
 use async_std::path::{Path, PathBuf};
 use async_std::stream::StreamExt;
@@ -29,14 +27,6 @@ impl System {
 
     pub async fn get_autostart(&mut self, id: &str) -> anyhow::Result<Option<App>> {
         load_app(self.app_path(id)).await
-    }
-
-    pub async fn start(&self, app: &App) -> anyhow::Result<Child> {
-        let mut process = Command::new(&app.cmd[0]);
-        if app.cmd.len() > 1 {
-            process.args(&app.cmd[1..]);
-        }
-        process.spawn().context("failed to spawn process")
     }
 
     pub async fn list_apps(&self) -> anyhow::Result<Vec<App>> {
