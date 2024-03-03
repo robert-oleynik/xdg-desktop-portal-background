@@ -4,21 +4,13 @@
 
 use std::collections::HashMap;
 
-use xdg::BaseDirectories;
 use zbus::object_server::SignalContext;
 
 use crate::system::{App, System};
 
+#[derive(Default)]
 pub struct Background {
     system: System,
-}
-
-impl From<BaseDirectories> for Background {
-    fn from(value: BaseDirectories) -> Self {
-        Self {
-            system: System::from(value),
-        }
-    }
 }
 
 #[zbus::interface(name = "org.freedesktop.impl.portal.Background")]

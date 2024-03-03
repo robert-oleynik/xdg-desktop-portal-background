@@ -1,13 +1,13 @@
+use std::str::FromStr;
+
 use anyhow::Context;
 use async_std::path::{Path, PathBuf};
 use async_std::stream::StreamExt;
 use configparser::ini::{Ini, WriteOptions};
-use xdg::BaseDirectories;
 
 /// Used to manage all background applications.
-pub struct System {
-    base_dir: BaseDirectories,
-}
+#[derive(Default)]
+pub struct System;
 
 pub struct App {
     pub id: String,
@@ -30,10 +30,9 @@ impl System {
     }
 
     pub async fn list_apps(&self) -> anyhow::Result<Vec<App>> {
-        let mut data_dir = self.base_dir.get_data_home();
-        data_dir.push("apps");
+        let app_dir = self.autostart_dir();
         let mut apps = Vec::new();
-        let mut files = async_std::fs::read_dir(data_dir)
+        let mut files = async_std::fs::read_dir(app_dir)
             .await
             .context("failed to read apps")?;
         loop {
@@ -51,8 +50,8 @@ impl System {
                     Ok(Some(app)) => app,
                     Ok(None) => unreachable!(),
                     Err(err) => {
-                        let path_str = path.to_str().unwrap();
-                        log::error!("failed to load file '{path_str}'. err={err:?}");
+                        let path_str = path.to_str();
+                        log::error!("failed to load file '{path_str:?}'. err={err:?}");
                         continue;
                     }
                 };
@@ -63,9 +62,7 @@ impl System {
     }
 
     pub fn autostart_dir(&self) -> PathBuf {
-        let mut autostart = self.base_dir.get_config_home();
-        autostart.push("autostart");
-        autostart.into()
+        PathBuf::from_str("~/.config/autostart").unwrap()
     }
 
     fn app_path(&self, app_id: &str) -> PathBuf {
@@ -75,15 +72,14 @@ impl System {
     }
 }
 
-impl From<BaseDirectories> for System {
-    fn from(dirs: BaseDirectories) -> Self {
-        System { base_dir: dirs }
-    }
-}
-
 const INI_SECTION: &str = "Desktop Entry";
 
 async fn store_app(path: impl AsRef<Path>, app: &App) -> anyhow::Result<()> {
+    log::debug!(
+        "add entry path={:?} id={:?}",
+        path.as_ref().to_str().unwrap_or(""),
+        app.id
+    );
     let mut autostart = Ini::new();
     autostart.set(INI_SECTION, "Type", Some("Application".into()));
     autostart.set(INI_SECTION, "Name", Some(app.id.clone()));
@@ -97,6 +93,7 @@ async fn store_app(path: impl AsRef<Path>, app: &App) -> anyhow::Result<()> {
 }
 
 async fn load_app(path: impl AsRef<Path>) -> anyhow::Result<Option<App>> {
+    log::debug!("get entry path={:?}", path.as_ref().to_str().unwrap_or(""));
     let mut autostart = Ini::new();
     if let Err(err) = autostart.load_async(path.as_ref()).await {
         return Err(anyhow::anyhow!("{err}")).context("failed to read .desktop file");
