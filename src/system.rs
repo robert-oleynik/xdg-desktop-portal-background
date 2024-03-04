@@ -1,13 +1,25 @@
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use anyhow::Context;
-use async_std::path::{Path, PathBuf};
-use async_std::stream::StreamExt;
-use configparser::ini::{Ini, WriteOptions};
+use configparser::ini::Ini;
 
 /// Used to manage all background applications.
-#[derive(Default)]
-pub struct System;
+pub struct System {
+    autostart_dir: PathBuf,
+}
+
+impl Default for System {
+    fn default() -> Self {
+        let home = std::env::var("HOME").unwrap();
+        let mut home = PathBuf::from_str(&home).unwrap();
+        home.push(".config");
+        home.push("autostart");
+        Self {
+            autostart_dir: home,
+        }
+    }
+}
 
 pub struct App {
     pub id: String,
@@ -19,7 +31,7 @@ pub struct App {
 impl System {
     pub async fn add_autostart(&mut self, app: &App) -> anyhow::Result<()> {
         let path = self.app_path(&app.id);
-        if path.exists().await {
+        if tokio::fs::try_exists(&path).await.unwrap_or(false) {
             log::warn!("overiting app config. app_id={:?}", app.id);
         }
         store_app(path, &app).await
@@ -32,20 +44,20 @@ impl System {
     pub async fn list_apps(&self) -> anyhow::Result<Vec<App>> {
         let app_dir = self.autostart_dir();
         let mut apps = Vec::new();
-        let mut files = async_std::fs::read_dir(app_dir)
+        let mut files = tokio::fs::read_dir(app_dir)
             .await
             .context("failed to read apps")?;
         loop {
-            let entry = match files.next().await {
-                Some(Ok(entry)) => entry,
-                Some(Err(err)) => {
+            let entry = match files.next_entry().await {
+                Ok(Some(entry)) => entry,
+                Ok(None) => break,
+                Err(err) => {
                     log::error!("failed to fetch app entry: {err:?}");
                     continue;
                 }
-                None => break,
             };
             let path = entry.path();
-            if path.is_file().await {
+            if path.is_file() {
                 let app: App = match load_app(&path).await {
                     Ok(Some(app)) => app,
                     Ok(None) => unreachable!(),
@@ -62,7 +74,7 @@ impl System {
     }
 
     pub fn autostart_dir(&self) -> PathBuf {
-        PathBuf::from_str("~/.config/autostart").unwrap()
+        self.autostart_dir.clone()
     }
 
     fn app_path(&self, app_id: &str) -> PathBuf {
@@ -80,22 +92,24 @@ async fn store_app(path: impl AsRef<Path>, app: &App) -> anyhow::Result<()> {
         path.as_ref().to_str().unwrap_or(""),
         app.id
     );
-    let mut autostart = Ini::new();
+    let mut autostart = Ini::new_cs();
     autostart.set(INI_SECTION, "Type", Some("Application".into()));
     autostart.set(INI_SECTION, "Name", Some(app.id.clone()));
     let command = app.cmd.join(" ");
     autostart.set(INI_SECTION, "Exec", Some(command));
-    let opts = WriteOptions::new_with_params(true, 0, 1);
     autostart
-        .pretty_write_async(path.as_ref(), &opts)
+        .write_async(path.as_ref())
         .await
         .context("failed to write .desktop file")
 }
 
 async fn load_app(path: impl AsRef<Path>) -> anyhow::Result<Option<App>> {
     log::debug!("get entry path={:?}", path.as_ref().to_str().unwrap_or(""));
-    let mut autostart = Ini::new();
-    if let Err(err) = autostart.load_async(path.as_ref()).await {
+    let mut autostart = Ini::new_cs();
+    if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+        return Ok(None);
+    }
+    if let Err(err) = autostart.load_async(&path).await {
         return Err(anyhow::anyhow!("{err}")).context("failed to read .desktop file");
     }
     let id = match autostart.get(INI_SECTION, "Name") {

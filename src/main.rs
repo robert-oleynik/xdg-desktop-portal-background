@@ -1,5 +1,6 @@
+use std::path::Path;
+
 use anyhow::Context;
-use async_std::path::Path;
 use clap::Parser;
 use log::LevelFilter;
 use log4rs::append::file::FileAppender;
@@ -30,14 +31,15 @@ pub fn init_logger(logfile: impl AsRef<Path>) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let home = std::env::var("HOME").unwrap();
     println!("started");
-    async_std::fs::create_dir_all("~/.config/autostart")
+    tokio::fs::create_dir_all(format!("{home}/.config/autostart"))
         .await
         .context("faield to create autostart dir")?;
-    let cache_path = "~/.cache/xdg-desktop-portal-background";
-    async_std::fs::create_dir_all(cache_path)
+    let cache_path = format!("{home}/.cache/xdg-desktop-portal-background");
+    tokio::fs::create_dir_all(&cache_path)
         .await
         .context("failed to create cache directories")?;
     let cache_path = format!("{cache_path}/background.log");
@@ -59,7 +61,5 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("services started");
 
-    async_std::future::pending::<()>().await;
-
-    Ok(())
+    std::future::pending().await
 }
